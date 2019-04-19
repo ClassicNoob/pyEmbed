@@ -24,7 +24,7 @@ function printusage {
 }
 
 #process commnad line args
-while [ "$1" != "" ]; then
+while [ "$1" != "" ]; do
     case $1 in
         
         -s|--source)
@@ -80,22 +80,26 @@ appendDefLine=$(cat $bedFile | head -n $bedFileMidPoint | grep -n ^def | tail -n
 
 #since we want the import statements to be grouped together, we must gather various info about import statements.
 sourceImportBlock=$(cat $sourceFile | grep -e ^import -e "^from.*import.*")
+sourceImportBlockLine=$(cat $sourceFile | grep -e ^import -e "^from.*import.*" | tail -n 1)
+sourceImportBlockLineNum=$(cat $sourceFile | grep -n "${sourceImportBlockLine}" | head -n 1 | cut -d ":" -f 1)
 bedImportLine=$(cat $bedFile | grep -n -e ^import -e "^from.*import.*" | tail -n 1 | cut -d ":" -f 1)
 
 #if the source file has code outside of functions (which is likely), we want to make sure it runs and is at the bottom of the code.
-runBlocks=$(cat $sourceFile | grep -v ^[[:space::]] | grep -v -e ^def -e ^# -e ^import -e ^class -e ^from.*import.* | sed '/^$/d')
+firstMainLine=$(cat $sourceFile | grep -v -e ^[[:space:]] | grep -v -e ^class -e ^def -e ^import -e ^from.*import.* -e ^\# | sed '/^$/d' | head -n 1)
+runBlockLine=$(cat $sourceFile | grep -n "$firstMainLine" | cut -d ":" -f 1)
+runBlocks=$(cat $sourceFile | tail -n +${runBlockLine})
 
 #builds each part into "blocks," then appends them all together in a proper order.
 blockOne=$(cat $bedFile | head -n $bedImportLine)
 blockTwo="$sourceImportBlock"
-blockThree=$(cat $bedFile | head -n $(($appendDefLine -1)) | tail -n +${bedImportLine})
-blockFour=$(cat $sourceFile | grep -e ^def -e ^class ^[[:space:]])
+blockThree=$(cat $bedFile | head -n $(($appendDefLine -1)) | tail -n +$((${bedImportLine} +1)))
+blockFour=$(cat $sourceFile | head -n $(($runBlockLine -1)) | tail -n +$((${sourceImportBlockLineNum} +1)))
 blockFive=$(cat $bedFile | tail -n +${appendDefLine})
 blockSix=$( echo "$runBlocks" | sed -e "s/^/\t/")
 
-finalBuild=$(echo "$blockOne"; echo " "; echo "$blockTwo"; echo " "; echi "$blockThree"; \
-            echo " "; echo "$blockFour"; echo " "; echo "$blockFive"; echo " "; \
-            echo "if __name__ == '__main__':"; echo "$blockSix")
+finalBuild=$(echo "$blockOne"; echo " "; echo "$blockTwo"; echo " "; echo "$blockThree"; \
+             echo " "; echo "$blockFour"; echo " "; echo "$blockFive"; echo " "; \
+             echo "if __name__ == '__main__':"; echo "$blockSix")
 
 echo "$finalBuild" > $outFile
 
@@ -105,18 +109,3 @@ else
     echo -e "${RED_MINUS} Unknown error has occurred."
     exit 1
 fi
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
